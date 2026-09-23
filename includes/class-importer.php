@@ -180,8 +180,14 @@ class Importer {
 		// A replacement leaves the old attachment behind on purpose: it may be
 		// used in published posts, and silently deleting it would break them.
 		// The new one carries the id, so the old row is detached from PicPeak.
+		//
+		// That means the library ends up with two files — the second named
+		// `…-1.jpg` by WordPress — and nothing on either says which is current.
+		// The old one is marked so that is answerable, rather than leaving a
+		// pile of near-identical rows and no way to tell them apart.
 		if ( null !== $already ) {
 			delete_post_meta( $already, self::META_PHOTO );
+			update_post_meta( $already, '_picpeak_superseded_by', $attachment_id );
 		}
 
 		return array(

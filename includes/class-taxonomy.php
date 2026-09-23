@@ -21,6 +21,34 @@ class Taxonomy {
 	public static function init(): void {
 		add_action( 'init', array( __CLASS__, 'register' ) );
 		add_action( 'restrict_manage_posts', array( __CLASS__, 'filter_dropdown' ) );
+		add_action( 'admin_init', array( __CLASS__, 'maybe_recount' ) );
+	}
+
+	/**
+	 * Recount terms once after an upgrade.
+	 *
+	 * Fixing the count callback only fixes counts written from now on. A site
+	 * that imported under the old one keeps its zeroes, and a zero still hides
+	 * the filter — so the terms have to be counted again explicitly, once.
+	 */
+	public static function maybe_recount(): void {
+		$done = get_option( 'picpeak_counts_fixed' );
+		if ( PICPEAK_VERSION === $done ) {
+			return;
+		}
+
+		$terms = get_terms(
+			array(
+				'taxonomy'   => self::NAME,
+				'hide_empty' => false,
+				'fields'     => 'ids',
+			)
+		);
+		if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+			wp_update_term_count_now( $terms, self::NAME );
+		}
+
+		update_option( 'picpeak_counts_fixed', PICPEAK_VERSION, false );
 	}
 
 	public static function register(): void {
@@ -40,6 +68,12 @@ class Taxonomy {
 				'show_in_rest'      => true,
 				'hierarchical'      => false,
 				'rewrite'           => false,
+				// Attachments have post_status 'inherit', and the default
+				// callback counts only 'publish' — so every term would report
+				// zero however many images carried it. That is not cosmetic:
+				// the media-library filter below asks for non-empty terms, so
+				// a zero count means the dropdown never appears at all.
+				'update_count_callback' => '_update_generic_term_count',
 				// Terms are created by the importer from gallery names, which
 				// are the photographer's own wording.
 				// The same gate as the import routes: these terms are created
