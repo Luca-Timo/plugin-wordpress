@@ -66,7 +66,10 @@ class Importer {
 	 * @return array|WP_Error {status: imported|skipped|replaced, attachment_id, title}
 	 */
 	public static function import( array $photo, array $event, array $opts ) {
-		if ( ! current_user_can( 'upload_files' ) ) {
+		// The same gate as the route, checked again here: this is the last
+		// point before a remote file is written into the library, and the
+		// importer is callable from anywhere in PHP.
+		if ( ! current_user_can( Rest::capability() ) ) {
 			return new WP_Error( 'picpeak_forbidden', __( 'You do not have permission to import media.', 'picpeak' ) );
 		}
 
@@ -85,6 +88,11 @@ class Importer {
 			);
 		}
 
+		// The caller is a browser, so nothing it says about this photo is
+		// authoritative — a crafted request could otherwise choose the filename
+		// the file lands under and the text written into post meta. Only the
+		// ids are taken on trust (and they are checked against the gallery by
+		// PicPeak itself); everything describing the file comes from PicPeak.
 		$resolution = (string) ( $opts['resolution'] ?? 'original' );
 		$query      = array();
 		if ( '' !== $resolution && 'original' !== $resolution ) {
@@ -96,26 +104,43 @@ class Importer {
 			$query['watermark'] = 'on';
 		}
 
-		$fetched = Client::get_binary( '/events/' . $event_id . '/photos/' . $photo_id . '/download', $query );
-		if ( is_wp_error( $fetched ) ) {
-			return $fetched;
-		}
+		require_once ABSPATH . 'wp-admin/includes/file.php';
 
-		$filename = self::filename_for( $photo );
-		$tmp      = wp_tempnam( $filename );
+		$tmp = wp_tempnam( 'picpeak' );
 		if ( ! $tmp ) {
 			return new WP_Error( 'picpeak_tmp', __( 'WordPress could not create a temporary file for the download.', 'picpeak' ) );
 		}
 
-		// WP_Filesystem is not initialised during a REST request; this is a
-		// temp file this process just created, not a site file.
-		$written = file_put_contents( $tmp, $fetched['body'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-		if ( false === $written ) {
+		$fetched = Client::to_file(
+			'/events/' . $event_id . '/photos/' . $photo_id . '/download',
+			$tmp,
+			$query
+		);
+		if ( is_wp_error( $fetched ) ) {
 			wp_delete_file( $tmp );
-			return new WP_Error( 'picpeak_tmp_write', __( 'WordPress could not write the downloaded file.', 'picpeak' ) );
+			return $fetched;
 		}
 
-		require_once ABSPATH . 'wp-admin/includes/file.php';
+		// Only image types. PicPeak also stores videos, and a media library is
+		// not where a 2 GB clip belongs; more to the point, this keeps the set
+		// of things sideloaded here to what the picker actually offers.
+		if ( 0 !== strpos( strtolower( $fetched['content_type'] ), 'image/' ) ) {
+			wp_delete_file( $tmp );
+			return new WP_Error(
+				'picpeak_not_an_image',
+				__( 'That item is not an image, so it was not imported.', 'picpeak' )
+			);
+		}
+
+		// PicPeak names the file in Content-Disposition, from the row it holds.
+		// That is the authoritative name; the browser's copy is only a fallback
+		// for an instance that somehow omits the header.
+		$filename = self::filename_from_disposition( $fetched['content_disposition'] );
+		if ( '' === $filename ) {
+			$filename = self::filename_for( $photo );
+		}
+
+
 		require_once ABSPATH . 'wp-admin/includes/media.php';
 		require_once ABSPATH . 'wp-admin/includes/image.php';
 
@@ -198,9 +223,37 @@ class Importer {
 	}
 
 	/**
-	 * The name the file lands under. source_filename is the camera-original
-	 * name PicPeak preserves across replaces, which is what a photographer
-	 * recognises; sanitize_file_name keeps it safe for the uploads directory.
+	 * The filename PicPeak put in Content-Disposition.
+	 *
+	 * Prefers the RFC 5987 `filename*` form, which is the one that survives
+	 * non-ASCII, and falls back to the quoted ASCII form. The result still goes
+	 * through sanitize_file_name(), so a header claiming `../../evil.php` can
+	 * only ever become a flat, extension-checked name in the uploads directory.
+	 */
+	private static function filename_from_disposition( string $header ): string {
+		if ( '' === $header ) {
+			return '';
+		}
+
+		if ( preg_match( "/filename\*\s*=\s*UTF-8''([^;]+)/i", $header, $m ) ) {
+			$decoded = rawurldecode( trim( $m[1] ) );
+			if ( '' !== $decoded ) {
+				return sanitize_file_name( $decoded );
+			}
+		}
+
+		if ( preg_match( '/filename\s*=\s*"([^"]*)"/i', $header, $m ) ) {
+			return sanitize_file_name( $m[1] );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Fallback name, from the row the browser sent. source_filename is the
+	 * camera-original name PicPeak preserves across replaces, which is what a
+	 * photographer recognises; sanitize_file_name keeps it safe for the uploads
+	 * directory.
 	 */
 	private static function filename_for( array $photo ): string {
 		$name = (string) ( $photo['source_filename'] ?? '' );

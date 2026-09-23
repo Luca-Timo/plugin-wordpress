@@ -24,20 +24,40 @@ use WP_REST_Server;
 
 class Rest {
 
-	const NS  = 'picpeak/v1';
-	const CAP = 'upload_files';
+	const NS = 'picpeak/v1';
 
 	public static function init(): void {
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
 	}
 
+	/**
+	 * Who may reach PicPeak through this site.
+	 *
+	 * Deliberately NOT upload_files, which Authors hold. The stored token is
+	 * admin-scoped on the PicPeak side and carries its OWNER's permissions, not
+	 * the WordPress caller's — so anyone who can call these routes can list
+	 * every gallery that admin can see, view every preview, and pull down
+	 * originals. On a site with contributors that would hand one photographer's
+	 * private client galleries to anyone who can write a post.
+	 *
+	 * WordPress cannot narrow the token, so the only control left is who may
+	 * use it, and that fails closed at manage_options. A site that genuinely
+	 * wants its editors importing can widen it deliberately:
+	 *
+	 *     add_filter( 'picpeak_required_capability', fn() => 'upload_files' );
+	 */
+	public static function capability(): string {
+		$cap = apply_filters( 'picpeak_required_capability', 'manage_options' );
+		return is_string( $cap ) && '' !== $cap ? $cap : 'manage_options';
+	}
+
 	public static function may( WP_REST_Request $request ) {
-		if ( current_user_can( self::CAP ) ) {
+		if ( current_user_can( self::capability() ) ) {
 			return true;
 		}
 		return new WP_Error(
 			'picpeak_forbidden',
-			__( 'You do not have permission to import media.', 'picpeak' ),
+			__( 'You do not have permission to import from PicPeak.', 'picpeak' ),
 			array( 'status' => rest_authorization_required_code() )
 		);
 	}
@@ -195,6 +215,11 @@ class Rest {
 		header( 'Content-Type: ' . $type );
 		header( 'Content-Length: ' . strlen( $result['body'] ) );
 		header( 'Cache-Control: private, max-age=3600' );
+		// Without this a shared cache keyed only on the URL could hand one
+		// logged-in user's preview to the next visitor. `private` alone asks an
+		// intermediary not to store it; Vary tells one that stores it anyway to
+		// key on the session.
+		header( 'Vary: Cookie' );
 		header( 'X-Content-Type-Options: nosniff' );
 		echo $result['body']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binary image body
 		exit;

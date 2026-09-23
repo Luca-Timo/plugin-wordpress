@@ -42,11 +42,14 @@ class Taxonomy {
 				'rewrite'           => false,
 				// Terms are created by the importer from gallery names, which
 				// are the photographer's own wording.
+				// The same gate as the import routes: these terms are created
+				// from PicPeak gallery names, so whoever may import may manage
+				// them, and nobody else.
 				'capabilities'      => array(
-					'manage_terms' => 'upload_files',
-					'edit_terms'   => 'upload_files',
-					'delete_terms' => 'upload_files',
-					'assign_terms' => 'upload_files',
+					'manage_terms' => Rest::capability(),
+					'edit_terms'   => Rest::capability(),
+					'delete_terms' => Rest::capability(),
+					'assign_terms' => Rest::capability(),
 				),
 			)
 		);

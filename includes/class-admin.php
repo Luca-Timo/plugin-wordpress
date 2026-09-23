@@ -14,7 +14,6 @@ defined( 'ABSPATH' ) || exit;
 class Admin {
 
 	const PAGE = 'picpeak-import';
-	const CAP  = 'upload_files';
 
 	public static function init(): void {
 		add_action( 'admin_menu', array( __CLASS__, 'add_page' ) );
@@ -26,7 +25,7 @@ class Admin {
 			'upload.php',
 			__( 'Import from PicPeak', 'picpeak' ),
 			__( 'Import from PicPeak', 'picpeak' ),
-			self::CAP,
+			Rest::capability(),
 			self::PAGE,
 			array( __CLASS__, 'render' )
 		);
@@ -85,7 +84,7 @@ class Admin {
 	}
 
 	public static function render(): void {
-		if ( ! current_user_can( self::CAP ) ) {
+		if ( ! current_user_can( Rest::capability() ) ) {
 			wp_die( esc_html__( 'You do not have permission to import media.', 'picpeak' ) );
 		}
 		?>

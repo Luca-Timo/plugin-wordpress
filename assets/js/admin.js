@@ -195,7 +195,13 @@
 				var img = el( 'img', {
 					loading: 'lazy',
 					alt: photo.source_filename || '',
-					src: data.root + '/events/' + state.event.id + '/preview/' + photo.id + '?w=640'
+					// An <img> cannot send the X-WP-Nonce header, and WordPress
+					// treats a cookie-authenticated REST request without a nonce
+					// as logged out — so the capability check would refuse every
+					// preview. rest_cookie_check_errors accepts _wpnonce in the
+					// query string, which is the only form an <img> can carry.
+					src: data.root + '/events/' + state.event.id + '/preview/' + photo.id +
+						'?w=640&_wpnonce=' + encodeURIComponent( data.nonce )
 				} );
 				// PicPeak answers 404 for anything with no preview tier; a
 				// placeholder is the honest rendering, not a broken image.

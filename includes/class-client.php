@@ -20,6 +20,16 @@ class Client {
 	const TIMEOUT = 20;
 
 	/**
+	 * Ceiling on a single downloaded file.
+	 *
+	 * Originals are routinely tens of megabytes and the instance is remote, so
+	 * without a bound one import can exhaust PHP's memory_limit and take the
+	 * request down with it. Any user who can reach the import endpoint can pick
+	 * the photo, so this is not only an accident case.
+	 */
+	const MAX_DOWNLOAD_BYTES = 134217728; // 128 MiB
+
+	/**
 	 * PicPeak's documented error codes. Anything not listed falls back to the
 	 * server's own message, which the v1 routes write for humans.
 	 */
@@ -69,9 +79,29 @@ class Client {
 		return $s;
 	}
 
+	/**
+	 * Builds an upstream URL with the query string encoded by hand.
+	 *
+	 * NOT add_query_arg(): it serialises through build_query(), which calls
+	 * _http_build_query() with $urlencode = false, so values go on the wire
+	 * verbatim. sanitize_text_field() keeps `&` and `=`, so a forwarded value
+	 * of `1&admin=1` would become two parameters — walking straight past the
+	 * allowlist in Rest::photos and adding parameters of its own to a request
+	 * carrying the admin token. Encoding each value is what makes that
+	 * allowlist mean anything.
+	 */
 	private static function url( array $s, string $path, array $query = array() ): string {
 		$url = untrailingslashit( $s['base_url'] ) . '/api/v1' . $path;
-		return empty( $query ) ? $url : add_query_arg( array_filter( $query, static fn( $v ) => null !== $v && '' !== $v ), $url );
+
+		$pairs = array();
+		foreach ( $query as $key => $value ) {
+			if ( null === $value || '' === $value ) {
+				continue;
+			}
+			$pairs[] = rawurlencode( (string) $key ) . '=' . rawurlencode( (string) $value );
+		}
+
+		return empty( $pairs ) ? $url : $url . '?' . implode( '&', $pairs );
 	}
 
 	private static function headers( array $s ): array {
@@ -160,9 +190,11 @@ class Client {
 	}
 
 	/**
-	 * A GET returning raw bytes plus the headers that describe them, for
-	 * previews and downloads. The body is held in memory, so callers that are
-	 * about to write a file should prefer to_file().
+	 * A GET returning raw bytes, for previews.
+	 *
+	 * The body is held in memory, so this is only for the preview tiers, which
+	 * are web-sized by construction. A full-size original goes through
+	 * to_file() instead, which never buffers it.
 	 */
 	public static function get_binary( string $path, array $query = array() ) {
 		$s = self::base();
@@ -173,8 +205,14 @@ class Client {
 		$response = wp_remote_get(
 			self::url( $s, $path, $query ),
 			array(
-				'timeout' => self::TIMEOUT,
-				'headers' => self::headers( $s ),
+				'timeout'             => self::TIMEOUT,
+				'headers'             => self::headers( $s ),
+				// Every request carries the token, so the same host policy that
+				// guarded the setting guards the request.
+				'reject_unsafe_urls'  => Settings::reject_unsafe_urls(),
+				// A preview tier is at most a couple of megabytes; anything
+				// larger means this is not the endpoint we think it is.
+				'limit_response_size' => 8388608,
 			)
 		);
 
@@ -204,6 +242,67 @@ class Client {
 		);
 	}
 
+	/**
+	 * A GET streamed straight to a local file.
+	 *
+	 * wp_remote_get with 'stream' writes the body as it arrives instead of
+	 * assembling it in memory, which is what makes importing a 40 MB original
+	 * survivable, and limit_response_size aborts a response that runs past the
+	 * ceiling rather than filling the disk.
+	 *
+	 * Returns the response headers on success; the bytes are already on disk.
+	 */
+	public static function to_file( string $path, string $destination, array $query = array() ) {
+		$s = self::base();
+		if ( is_wp_error( $s ) ) {
+			return $s;
+		}
+
+		$response = wp_remote_get(
+			self::url( $s, $path, $query ),
+			array(
+				'timeout'             => self::TIMEOUT,
+				'headers'             => self::headers( $s ),
+				// Every request carries the token, so the same host policy that
+				// guarded the setting guards the request.
+				'reject_unsafe_urls'  => Settings::reject_unsafe_urls(),
+				'stream'              => true,
+				'filename'            => $destination,
+				'limit_response_size' => self::MAX_DOWNLOAD_BYTES,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error( 'picpeak_unreachable', $response->get_error_message() );
+		}
+
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		if ( $status < 200 || $status >= 300 ) {
+			// On a non-2xx, the error body was streamed to the file rather than
+			// returned, so read the little of it that matters from disk.
+			$body = is_readable( $destination )
+				? json_decode( (string) file_get_contents( $destination ), true ) // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+				: null;
+			$code = is_array( $body ) && isset( $body['code'] ) ? (string) $body['code'] : '';
+			$msg  = self::explain( $code, $status );
+
+			return new WP_Error(
+				'picpeak_http_' . $status,
+				'' !== $msg ? $msg : sprintf(
+					/* translators: %d: an HTTP status code. */
+					__( 'PicPeak answered with status %d.', 'picpeak' ),
+					$status
+				),
+				array( 'status' => $status, 'picpeak_code' => $code )
+			);
+		}
+
+		return array(
+			'content_type'        => (string) wp_remote_retrieve_header( $response, 'content-type' ),
+			'content_disposition' => (string) wp_remote_retrieve_header( $response, 'content-disposition' ),
+		);
+	}
+
 	/** Galleries the token's owner can see. */
 	public static function events( int $page = 1, int $limit = 25 ) {
 		return self::get_json( '/events', array( 'page' => $page, 'limit' => $limit ) );
@@ -212,5 +311,10 @@ class Client {
 	/** One gallery's photos, passing PicPeak's own proofing filters straight through. */
 	public static function photos( int $event_id, array $query = array() ) {
 		return self::get_json( '/events/' . $event_id . '/photos', $query );
+	}
+
+	/** One gallery, read from PicPeak rather than taken on the caller's word. */
+	public static function event( int $event_id ) {
+		return self::get_json( '/events/' . $event_id );
 	}
 }

@@ -99,6 +99,7 @@ class Settings {
 			$base_url = (string) ( $existing['base_url'] ?? '' );
 		} else {
 			$base_url = isset( $input['base_url'] ) ? esc_url_raw( trim( (string) $input['base_url'] ) ) : '';
+			$base_url = self::validate_url( $base_url, (string) ( $existing['base_url'] ?? '' ) );
 		}
 		$out = array( 'base_url' => untrailingslashit( $base_url ) );
 
@@ -113,12 +114,72 @@ class Settings {
 		return $out;
 	}
 
+	/**
+	 * Where the token is allowed to be sent.
+	 *
+	 * This matters more than an ordinary URL field: every request carries
+	 * `Authorization: Bearer <token>`, so whoever sets this address decides who
+	 * receives the token. A bad value is rejected back to the previous one
+	 * rather than saved, because saving it would send the credential on the
+	 * next request.
+	 *
+	 * Embedded credentials are stripped: `https://user:pass@host` is a shape
+	 * that confuses both people and parsers, and nothing here needs it.
+	 */
+	private static function validate_url( string $candidate, string $fallback ): string {
+		if ( '' === $candidate ) {
+			return '';
+		}
+
+		$parts = wp_parse_url( $candidate );
+		if ( empty( $parts['host'] ) || empty( $parts['scheme'] )
+			|| ! in_array( strtolower( $parts['scheme'] ), array( 'http', 'https' ), true ) ) {
+			add_settings_error(
+				self::OPTION,
+				'picpeak_bad_url',
+				__( 'That does not look like an http or https address, so it was not saved.', 'picpeak' )
+			);
+			return $fallback;
+		}
+
+		$clean = strtolower( $parts['scheme'] ) . '://' . $parts['host']
+			. ( isset( $parts['port'] ) ? ':' . (int) $parts['port'] : '' )
+			. ( isset( $parts['path'] ) ? $parts['path'] : '' );
+
+		// wp_http_validate_url refuses private and loopback addresses. A
+		// self-hosted PicPeak on a LAN is a legitimate setup, so this can be
+		// opted out of — but it fails closed, because the default case is a
+		// public instance and the cost of getting it wrong is the token.
+		if ( self::reject_unsafe_urls() && ! wp_http_validate_url( $clean ) ) {
+			add_settings_error(
+				self::OPTION,
+				'picpeak_unsafe_url',
+				__( 'That address is a private or loopback host. If your PicPeak really is on a local network, allow it with the picpeak_reject_unsafe_urls filter.', 'picpeak' )
+			);
+			return $fallback;
+		}
+
+		return $clean;
+	}
+
+	/**
+	 * Whether private and loopback hosts are refused. Filterable for a
+	 * self-hosted instance on a LAN:
+	 *
+	 *     add_filter( 'picpeak_reject_unsafe_urls', '__return_false' );
+	 */
+	public static function reject_unsafe_urls(): bool {
+		return (bool) apply_filters( 'picpeak_reject_unsafe_urls', true );
+	}
+
 	/** Enough of the token to recognise which one is stored, and no more. */
 	private static function token_hint( string $token ): string {
 		if ( '' === $token ) {
 			return '';
 		}
-		return substr( $token, 0, 11 ) . '…' . substr( $token, -4 );
+		// The prefix is a constant, so it reveals nothing; the last four
+		// distinguish one token from another without narrowing a guess.
+		return 'pp_live_…' . substr( $token, -4 );
 	}
 
 	public static function render(): void {

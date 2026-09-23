@@ -61,6 +61,33 @@ The picker calls a `picpeak/v1` namespace on **this** site; WordPress attaches
 the token server-side. Those routes require the `upload_files` capability and a
 REST nonce, and forward only the query parameters PicPeak documents.
 
+### Who can import
+
+The routes are gated on `manage_options` — administrators only — and **not** on
+`upload_files`, which Authors hold. This is deliberate. WordPress cannot narrow
+the PicPeak token: it carries the permissions of the admin who created it, so
+anyone who can call these routes can list every gallery that account can see and
+pull down originals. On a site with contributors, `upload_files` would hand one
+photographer's private client galleries to anyone who can write a post — and
+imported files land in `wp-content/uploads`, which is served without
+authentication.
+
+Widen it only if you mean to:
+
+```php
+add_filter( 'picpeak_required_capability', fn() => 'upload_files' );
+```
+
+### Self-hosting PicPeak on a local network
+
+Because every request carries the token, the instance URL is refused if it
+resolves to a private or loopback address. If your PicPeak genuinely is on a
+LAN, allow it explicitly:
+
+```php
+add_filter( 'picpeak_reject_unsafe_urls', '__return_false' );
+```
+
 To keep the token out of the database entirely, define it in `wp-config.php`:
 
 ```php
