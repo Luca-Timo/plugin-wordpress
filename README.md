@@ -7,8 +7,8 @@ Connect the plugin once with an API token, browse your galleries from inside
 wp-admin, and import a whole gallery or a hand-picked selection — with the
 proofing metadata PicPeak already holds carried across.
 
-> **Status: early.** The connection, the settings screen and the REST proxy work.
-> The picker and the importer are not built yet. See [Roadmap](#roadmap).
+> **Status: early but usable.** Connection, gallery browser and import all work.
+> Not yet exercised against a live instance. See [Roadmap](#roadmap).
 
 ## Why import rather than embed
 
@@ -43,9 +43,9 @@ without that PR.
 
 ## Installation
 
-Download the zip from [Releases](../../releases), then **Plugins → Add New →
-Upload Plugin**. The zip contains a single top-level folder, which is what
-WordPress expects.
+Download `picpeak.zip` from [Releases](../../releases), then **Plugins → Add New →
+Upload Plugin**. The zip contains a single top-level folder named `picpeak`,
+which is what WordPress expects and what the text domain loads from.
 
 On hosts that set `DISALLOW_FILE_MODS` the upload form is hidden; unpack into
 `wp-content/plugins/picpeak/` over SFTP, or use `wp plugin install ./picpeak.zip --activate`.
@@ -73,15 +73,18 @@ The settings fields then render as locked rather than silently ignoring input.
 ## Roadmap
 
 - [x] Connection settings, credential handling, REST proxy
-- [ ] Gallery browser: thumbnail grid with PicPeak's own proofing filters
+- [x] Gallery browser: thumbnail grid with PicPeak's own proofing filters
       (`marked_only`, `color_labels`, `min_rating`) — so "import what the client
       starred" is one control
-- [ ] Import: batched sideload, deduplicated on the PicPeak photo id, with a
+- [x] Import: batched sideload, deduplicated on the PicPeak photo id, with a
       resolution choice and an optional watermark
-- [ ] A `picpeak_gallery` taxonomy on attachments, giving a filter dropdown in
+- [x] A `picpeak_gallery` taxonomy on attachments, giving a filter dropdown in
       the media grid with no folder plugin involved
-- [ ] Optional folder-plugin adapters (FileBird, Real Media Library)
-- [ ] Updates through GitHub Releases
+- [x] Optional folder-plugin adapters (FileBird, Real Media Library)
+- [x] Release zip built by CI, named `picpeak/` as WordPress requires
+- [ ] Updates through GitHub Releases (Plugin Update Checker)
+- [ ] German translation
+- [ ] Tested against a live PicPeak instance
 
 Import only. Nothing is written back to PicPeak.
 

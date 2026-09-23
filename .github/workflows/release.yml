@@ -1,0 +1,53 @@
+name: Release
+
+# Builds the installable zip on a tag. WordPress expects a single top-level
+# folder inside the zip, and that folder's name becomes the plugin directory —
+# which the text domain is loaded from. So it must be `picpeak`, not the
+# repository name.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the plugin header version matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          header=$(grep -m1 '^ \* Version:' picpeak.php | sed 's/.*Version:[[:space:]]*//')
+          if [ "$tag" != "$header" ]; then
+            echo "Tag $tag does not match the plugin header version $header" >&2
+            exit 1
+          fi
+
+      - name: Lint every PHP file
+        run: |
+          docker run --rm -v "$PWD":/app -w /app php:7.4-cli \
+            sh -c 'for f in picpeak.php includes/*.php; do php -l "$f" || exit 1; done'
+
+      - name: Build the zip
+        run: |
+          mkdir -p build/picpeak
+          rsync -a --exclude-from=.distignore ./ build/picpeak/
+          cd build && zip -rq picpeak.zip picpeak
+
+      - name: Attach it to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/picpeak.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: picpeak-plugin
+          path: build/picpeak.zip

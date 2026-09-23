@@ -1,0 +1,98 @@
+/* Import screen. Deliberately close to core admin styling — this is a
+   WordPress screen, not a branded surface inside one. */
+
+.picpeak-app { max-width: 1200px; }
+
+.picpeak-row { display: flex; align-items: center; gap: 8px; }
+
+.picpeak-toolbar,
+.picpeak-footer {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding: 12px;
+	margin: 12px 0;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+}
+
+.picpeak-filter { display: flex; align-items: center; gap: 6px; }
+.picpeak-filter label,
+.picpeak-row label { font-weight: 600; }
+.picpeak-check { display: flex; align-items: center; gap: 4px; }
+.picpeak-spacer { flex: 1 1 auto; }
+.picpeak-count { color: #50575e; }
+.picpeak-status { color: #50575e; }
+.picpeak-note { flex-basis: 100%; margin: 0; color: #50575e; }
+.picpeak-empty { padding: 24px; text-align: center; color: #50575e; }
+
+.picpeak-grid {
+	display: grid;
+	grid-template-columns: repeat( auto-fill, minmax( 160px, 1fr ) );
+	gap: 12px;
+}
+
+.picpeak-tile {
+	position: relative;
+	display: block;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	overflow: hidden;
+	cursor: pointer;
+}
+
+.picpeak-tile.is-selected { border-color: #2271b1; box-shadow: 0 0 0 2px #2271b1; }
+.picpeak-tile.is-disabled { cursor: default; opacity: 0.6; }
+
+.picpeak-tile input[type="checkbox"] {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 1;
+	margin: 0;
+}
+
+.picpeak-tile img {
+	display: block;
+	width: 100%;
+	aspect-ratio: 4 / 3;
+	object-fit: cover;
+	background: #f0f0f1;
+}
+
+.picpeak-placeholder {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	aspect-ratio: 4 / 3;
+	background: #f0f0f1;
+	color: #50575e;
+	font-size: 12px;
+	text-align: center;
+	padding: 8px;
+	box-sizing: border-box;
+}
+
+.picpeak-name {
+	display: block;
+	padding: 6px 8px;
+	font-size: 12px;
+	color: #1d2327;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.picpeak-failures ul { margin: 0 0 8px 20px; list-style: disc; }
+
+@media ( prefers-color-scheme: dark ) {
+	/* wp-admin does not ship a dark mode, so this only applies where a site
+	   has opted into one; keep it to surfaces this plugin owns. */
+	.picpeak-toolbar,
+	.picpeak-footer,
+	.picpeak-tile { background: inherit; }
+}

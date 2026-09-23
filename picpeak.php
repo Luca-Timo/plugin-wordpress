@@ -25,6 +25,10 @@ define( 'PICPEAK_URL', plugin_dir_url( __FILE__ ) );
 require_once PICPEAK_DIR . 'includes/class-settings.php';
 require_once PICPEAK_DIR . 'includes/class-client.php';
 require_once PICPEAK_DIR . 'includes/class-rest.php';
+require_once PICPEAK_DIR . 'includes/class-taxonomy.php';
+require_once PICPEAK_DIR . 'includes/class-folders.php';
+require_once PICPEAK_DIR . 'includes/class-importer.php';
+require_once PICPEAK_DIR . 'includes/class-admin.php';
 
 add_action(
 	'plugins_loaded',
@@ -32,5 +36,7 @@ add_action(
 		load_plugin_textdomain( 'picpeak', false, dirname( plugin_basename( PICPEAK_FILE ) ) . '/languages' );
 		Settings::init();
 		Rest::init();
+		Taxonomy::init();
+		Admin::init();
 	}
 );
