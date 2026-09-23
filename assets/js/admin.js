@@ -19,7 +19,11 @@
 		event: null,
 		photos: [],
 		selected: {},
-		filters: { marked_only: '', color_labels: '', min_rating: '' },
+		// `source` decides WHOSE marks the other two filter on. PicPeak keeps
+		// the photographer's own triage separate from what guests left, in
+		// different tables, and a rating filter aimed at the wrong one silently
+		// matches nothing — which is what this control exists to prevent.
+		filters: { source: 'mine', marked: '', colour: '', rating: '' },
 		importing: false,
 		stop: false
 	};
@@ -115,23 +119,27 @@
 		}
 
 		return el( 'div', { class: 'picpeak-toolbar' }, [
-			filter( 'marked_only', 'Show', [
-				{ value: '', label: 'All photos' },
-				{ value: 'true', label: 'Marked by the client' }
+			filter( 'source', t.marksBy, [
+				{ value: 'mine', label: t.marksMine },
+				{ value: 'client', label: t.marksClient }
 			] ),
-			filter( 'color_labels', 'Colour', [
-				{ value: '', label: 'Any' },
-				{ value: 'green', label: 'Green' },
-				{ value: 'yellow', label: 'Yellow' },
-				{ value: 'red', label: 'Red' },
-				{ value: 'blue', label: 'Blue' },
-				{ value: 'purple', label: 'Purple' }
+			filter( 'marked', t.show, [
+				{ value: '', label: t.allPhotos },
+				{ value: 'true', label: t.markedOnly }
 			] ),
-			filter( 'min_rating', 'Rating', [
-				{ value: '', label: 'Any' },
-				{ value: '3', label: '3 stars and up' },
-				{ value: '4', label: '4 stars and up' },
-				{ value: '5', label: '5 stars' }
+			filter( 'colour', t.colour, [
+				{ value: '', label: t.any },
+				{ value: 'green', label: t.green },
+				{ value: 'yellow', label: t.yellow },
+				{ value: 'red', label: t.red },
+				{ value: 'blue', label: t.blue },
+				{ value: 'purple', label: t.purple }
+			] ),
+			filter( 'rating', t.rating, [
+				{ value: '', label: t.any },
+				{ value: '3', label: t.rating3 },
+				{ value: '4', label: t.rating4 },
+				{ value: '5', label: t.rating5 }
 			] ),
 			el( 'span', { class: 'picpeak-spacer' } ),
 			el( 'button', {
@@ -355,11 +363,27 @@
 		app.appendChild( renderGalleryPicker() );
 		app.appendChild( el( 'p', { class: 'picpeak-empty', text: t.loading } ) );
 
+		/**
+		 * Maps the toolbar onto PicPeak's parameters.
+		 *
+		 * The colour and rating filters have two forms each — one for guest
+		 * feedback, one for the token owner's own marks — and they read
+		 * different tables. Sending the guest form while the photographer's own
+		 * triage is what carries the marks returns an empty grid and looks like
+		 * a broken filter, so whose marks to use is an explicit choice and both
+		 * filters follow it.
+		 */
 		function query( page ) {
-			var parts = [ 'limit=100', 'page=' + page ];
-			Object.keys( state.filters ).forEach( function ( k ) {
-				if ( state.filters[ k ] ) { parts.push( k + '=' + encodeURIComponent( state.filters[ k ] ) ); }
-			} );
+			var mine = state.filters.source === 'mine';
+			var parts = [ 'limit=100', 'page=' + page, 'mark_source=' + ( mine ? 'mine' : 'client' ) ];
+
+			if ( state.filters.marked ) { parts.push( 'marked_only=true' ); }
+			if ( state.filters.colour ) {
+				parts.push( ( mine ? 'my_color_labels=' : 'color_labels=' ) + encodeURIComponent( state.filters.colour ) );
+			}
+			if ( state.filters.rating ) {
+				parts.push( ( mine ? 'my_min_rating=' : 'min_rating=' ) + encodeURIComponent( state.filters.rating ) );
+			}
 			return parts.join( '&' );
 		}
 
