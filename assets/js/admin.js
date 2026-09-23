@@ -229,11 +229,42 @@
 	}
 
 	function renderFooter() {
-		var resolution = el( 'select', { id: 'picpeak-resolution' }, [
-			el( 'option', { value: '2048x2048', text: 'Web (2048 px)' } ),
-			el( 'option', { value: '1600x1600', text: 'Web (1600 px)' } ),
-			el( 'option', { value: 'original', text: 'Original' } )
+		// Sizes are expressed as the longest edge, which is how an export
+		// dialog puts it and how photographers think about it. PicPeak takes a
+		// BOX and fits the photo inside it with the aspect ratio kept, so a
+		// square box of NxN is exactly "no edge longer than N" — a 3000x2000
+		// landscape at 2048 comes back 2048x1365, not squashed to a square.
+		var custom = el( 'input', {
+			type: 'number', id: 'picpeak-custom-size', class: 'small-text',
+			min: '1', max: '99999', step: '1', value: '2048',
+			'aria-label': t.longestEdge
+		} );
+		var customWrap = el( 'span', { class: 'picpeak-custom' }, [
+			custom,
+			el( 'span', { text: ' px' } )
 		] );
+		customWrap.hidden = true;
+
+		var resolution = el( 'select', {
+			id: 'picpeak-resolution',
+			onchange: function () { customWrap.hidden = resolution.value !== 'custom'; }
+		}, [
+			el( 'option', { value: '2048x2048', text: t.size2048 } ),
+			el( 'option', { value: '1600x1600', text: t.size1600 } ),
+			el( 'option', { value: '1200x1200', text: t.size1200 } ),
+			el( 'option', { value: 'custom', text: t.sizeCustom } ),
+			el( 'option', { value: 'original', text: t.sizeOriginal } )
+		] );
+
+		// What actually goes to the API: a preset id, or the custom edge as a
+		// square box. Anything out of range falls back to the default rather
+		// than sending a value the API will refuse.
+		function chosenResolution() {
+			if ( resolution.value !== 'custom' ) { return resolution.value; }
+			var n = parseInt( custom.value, 10 );
+			if ( ! ( n > 0 ) || n > 99999 ) { return '2048x2048'; }
+			return n + 'x' + n;
+		}
 
 		var watermark = el( 'input', { type: 'checkbox', id: 'picpeak-watermark' } );
 		var replace = el( 'input', { type: 'checkbox', id: 'picpeak-replace' } );
@@ -246,7 +277,7 @@
 			text: t.import,
 			onclick: function () {
 				runImport( {
-					resolution: resolution.value,
+					resolution: chosenResolution(),
 					watermark: watermark.checked,
 					on_duplicate: replace.checked ? 'replace' : 'skip'
 				} );
@@ -254,7 +285,11 @@
 		} );
 
 		var footer = el( 'div', { class: 'picpeak-footer' }, [
-			el( 'span', { class: 'picpeak-filter' }, [ el( 'label', { for: 'picpeak-resolution', text: 'Size' } ), resolution ] ),
+			el( 'span', { class: 'picpeak-filter' }, [
+				el( 'label', { for: 'picpeak-resolution', text: t.size } ),
+				resolution,
+				customWrap
+			] ),
 			el( 'label', { class: 'picpeak-check' }, [ watermark, document.createTextNode( ' Apply the gallery watermark' ) ] ),
 			el( 'label', { class: 'picpeak-check' }, [ replace, document.createTextNode( ' Re-import photos already here' ) ] ),
 			el( 'span', { class: 'picpeak-spacer' } ),
@@ -379,6 +414,7 @@
 		var done = 0;
 		var tally = { imported: 0, skipped: 0, replaced: 0, failed: 0 };
 		var failures = [];
+		var folderFailures = 0;
 
 		function finish() {
 			state.importing = false;
@@ -391,6 +427,16 @@
 				if ( tally[ k ] ) { parts.push( tally[ k ] + ' ' + t[ k ] ); }
 			} );
 			status.textContent = t.done + ' ' + parts.join( ', ' ) + '.';
+
+			// A folder plugin is active but did not take the attachment. The
+			// import itself is fine, so this is a notice rather than a failure
+			// — but it is said out loud, because the alternative is a folder
+			// tree that silently never fills up.
+			if ( folderFailures ) {
+				app.appendChild( el( 'div', { class: 'notice notice-warning' }, [
+					el( 'p', { text: sprintf( t.folderFailed, [ folderFailures, data.folder || '' ] ) } )
+				] ) );
+			}
 
 			if ( failures.length ) {
 				app.appendChild( el( 'div', { class: 'notice notice-warning picpeak-failures' }, [
@@ -445,6 +491,7 @@
 		function record( result ) {
 			done++;
 			tally[ result.status ] = ( tally[ result.status ] || 0 ) + 1;
+			if ( result.folder === 'failed' ) { folderFailures++; }
 			if ( result.status === 'failed' ) {
 				failures.push( ( result.title || result.photo_id ) + ': ' + result.message );
 			}

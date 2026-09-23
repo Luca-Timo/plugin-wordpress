@@ -96,3 +96,6 @@
 	.picpeak-footer,
 	.picpeak-tile { background: inherit; }
 }
+
+.picpeak-custom { display: inline-flex; align-items: center; gap: 4px; }
+.picpeak-custom[hidden] { display: none; }

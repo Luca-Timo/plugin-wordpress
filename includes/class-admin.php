@@ -76,6 +76,15 @@ class Admin {
 					'viewLibrary'    => __( 'Open the media library', 'picpeak' ),
 					'stop'           => __( 'Stop', 'picpeak' ),
 					'processing'     => __( 'Still processing in PicPeak', 'picpeak' ),
+					'size'           => __( 'Size', 'picpeak' ),
+					'size2048'       => __( 'Long edge 2048 px', 'picpeak' ),
+					'size1600'       => __( 'Long edge 1600 px', 'picpeak' ),
+					'size1200'       => __( 'Long edge 1200 px', 'picpeak' ),
+					'sizeCustom'     => __( 'Custom…', 'picpeak' ),
+					'sizeOriginal'   => __( 'Original', 'picpeak' ),
+					'longestEdge'    => __( 'Longest edge in pixels', 'picpeak' ),
+					/* translators: 1: number of images, 2: folder plugin name. */
+					'folderFailed'   => __( '%1$d image(s) imported but could not be placed in a %2$s folder. They are still in the media library and tagged with the gallery name.', 'picpeak' ),
 					/* translators: %d: how many photos were loaded. */
 					'truncated'      => __( 'This gallery is larger than this screen loads at once. Showing the first %d photos — narrow it with the filters to reach the rest.', 'picpeak' ),
 				),

@@ -164,7 +164,7 @@ class Importer {
 		}
 
 		$attachment_id = (int) $attachment_id;
-		self::tag( $attachment_id, $photo, $event, $resolution );
+		$folder        = self::tag( $attachment_id, $photo, $event, $resolution );
 
 		// A replacement leaves the old attachment behind on purpose: it may be
 		// used in published posts, and silently deleting it would break them.
@@ -177,11 +177,14 @@ class Importer {
 			'status'        => null !== $already ? 'replaced' : 'imported',
 			'attachment_id' => $attachment_id,
 			'title'         => get_the_title( $attachment_id ),
+			// Reported, not swallowed: a folder plugin whose API moved would
+			// otherwise look exactly like one that worked.
+			'folder'        => $folder,
 		);
 	}
 
 	/** Everything worth keeping about where this image came from. */
-	private static function tag( int $attachment_id, array $photo, array $event, string $resolution ): void {
+	private static function tag( int $attachment_id, array $photo, array $event, string $resolution ): string {
 		update_post_meta( $attachment_id, self::META_PHOTO, (string) (int) $photo['id'] );
 		update_post_meta( $attachment_id, self::META_EVENT, (string) (int) $event['id'] );
 		update_post_meta( $attachment_id, self::META_INSTANCE, Settings::instance_id() );
@@ -219,7 +222,7 @@ class Importer {
 			wp_set_object_terms( $attachment_id, array( $term_id ), Taxonomy::NAME, false );
 		}
 
-		Folders::place( $attachment_id, $event );
+		return Folders::place( $attachment_id, $event );
 	}
 
 	/**

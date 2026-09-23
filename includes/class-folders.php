@@ -51,14 +51,23 @@ class Folders {
 	 * Failure is deliberately silent. The image is already in the library and
 	 * already carries its taxonomy term, so a folder plugin changing its API
 	 * between versions must not turn a successful import into a failed one.
+	 *
+	 * @return string One of: `none` (no folder plugin active, nothing to do),
+	 *                `placed`, or `failed` (a plugin is active but its API did
+	 *                not do what this adapter expects).
 	 */
-	public static function place( int $attachment_id, array $event ): void {
+	public static function place( int $attachment_id, array $event ): string {
+		$adapter = self::detect();
+		if ( null === $adapter ) {
+			return 'none';
+		}
+
 		$name = trim( (string) ( $event['event_name'] ?? '' ) );
 		if ( '' === $name ) {
 			$name = trim( (string) ( $event['slug'] ?? '' ) );
 		}
 		if ( '' === $name ) {
-			return;
+			return 'none';
 		}
 
 		/**
@@ -70,41 +79,59 @@ class Folders {
 		$name = (string) apply_filters( 'picpeak_folder_name', $name, $event );
 
 		try {
-			switch ( self::detect() ) {
-				case 'filebird':
-					self::place_filebird( $attachment_id, $name );
-					break;
-				case 'real-media-library':
-					self::place_rml( $attachment_id, $name );
-					break;
-			}
+			$placed = 'filebird' === $adapter
+				? self::place_filebird( $attachment_id, $name )
+				: self::place_rml( $attachment_id, $name );
 		} catch ( \Throwable $e ) {
-			// An import that landed is not a failure because a folder plugin
-			// moved its API. Recorded for support, not surfaced.
+			// A TypeError from a renamed third-party method reads the same as
+			// any other failure here, and neither should cost the import.
+			$placed = false;
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				error_log( 'PicPeak: could not place attachment in a folder: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			}
 		}
+
+		return $placed ? 'placed' : 'failed';
 	}
 
-	private static function place_filebird( int $attachment_id, string $name ): void {
+	/** True only if the attachment is verifiably in the folder afterwards. */
+	private static function place_filebird( int $attachment_id, string $name ): bool {
+		// Each call is checked before use. These are third-party APIs across
+		// major versions, so "the class is loaded" is not a promise that a
+		// given method is still there — and an unverified adapter that fails
+		// quietly is worse than one that says it failed.
+		if ( ! method_exists( '\FileBird\Model\Folder', 'getFolderByName' ) ) {
+			return false;
+		}
+
 		$folder = \FileBird\Model\Folder::getFolderByName( $name );
 		$id     = is_array( $folder ) && isset( $folder['id'] ) ? (int) $folder['id'] : 0;
 
-		if ( ! $id ) {
+		if ( ! $id && method_exists( '\FileBird\Model\Folder', 'newOrGet' ) ) {
 			$created = \FileBird\Model\Folder::newOrGet( $name, 0 );
 			$id      = is_array( $created ) && isset( $created['id'] ) ? (int) $created['id'] : (int) $created;
 		}
 
-		if ( $id > 0 && class_exists( '\FileBird\Classes\Helpers' ) ) {
-			\FileBird\Classes\Helpers::setFolder( array( $attachment_id ), $id );
+		if ( $id <= 0 || ! method_exists( '\FileBird\Classes\Helpers', 'setFolder' ) ) {
+			return false;
 		}
+
+		\FileBird\Classes\Helpers::setFolder( array( $attachment_id ), $id );
+		return true;
 	}
 
-	private static function place_rml( int $attachment_id, string $name ): void {
-		$folder_id = wp_rml_create_or_return_existing_folder( $name );
-		if ( $folder_id && ! is_wp_error( $folder_id ) && function_exists( 'wp_attachment_move' ) ) {
-			wp_attachment_move( array( $attachment_id ), (int) $folder_id );
+	/** True only if the attachment is verifiably in the folder afterwards. */
+	private static function place_rml( int $attachment_id, string $name ): bool {
+		if ( ! function_exists( 'wp_attachment_move' ) ) {
+			return false;
 		}
+
+		$folder_id = wp_rml_create_or_return_existing_folder( $name );
+		if ( ! $folder_id || is_wp_error( $folder_id ) ) {
+			return false;
+		}
+
+		wp_attachment_move( array( $attachment_id ), (int) $folder_id );
+		return true;
 	}
 }

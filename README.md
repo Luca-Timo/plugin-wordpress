@@ -97,6 +97,48 @@ define( 'PICPEAK_API_TOKEN', 'pp_live_…' );
 
 The settings fields then render as locked rather than silently ignoring input.
 
+## Resizing
+
+Resizing happens **on the PicPeak server**, before anything is transferred, so
+only the resized bytes cross the wire. Importing a 400-photo gallery at 2048 px
+moves a fraction of what the originals would.
+
+Sizes are given as the **longest edge**, the way an export dialog puts it. The
+photo is fitted inside that box with its aspect ratio kept and is never
+enlarged, so a 3000×2000 landscape at 2048 comes back 2048×1365. Presets cover
+2048, 1600 and 1200 px; `Custom…` takes any value up to 99999.
+
+Two things are served at original size whatever you pick, because re-encoding
+them would produce bytes that disagree with their own filename and content type:
+
+- **videos** (excluded from the picker by default anyway)
+- **RAW and HEIC/HEIF**
+
+A photo already smaller than the box is sent as stored rather than re-encoded.
+
+## Folders
+
+WordPress core has no media folders, so every import is tagged with a
+`picpeak_gallery` term — that is what the filter dropdown in the media library
+uses, and it needs no other plugin.
+
+If **FileBird** or **Real Media Library** is active, imports are additionally
+placed in a folder named after the gallery. This is detected at runtime; with
+neither installed nothing is attempted and nothing is missing.
+
+> **Not yet verified against a live install.** Both adapters are written against
+> those plugins' documented APIs but have not been run with either plugin
+> present. If an API has moved, the import still succeeds and the image is still
+> tagged — and the screen now says how many could not be placed, rather than
+> leaving you to notice an empty folder tree. Treat this as the least-proven
+> part of the plugin.
+
+Rename the folder with a filter:
+
+```php
+add_filter( 'picpeak_folder_name', fn( $name, $event ) => 'Shoots/' . $name, 10, 2 );
+```
+
 ## Roadmap
 
 - [x] Connection settings, credential handling, REST proxy
@@ -107,7 +149,8 @@ The settings fields then render as locked rather than silently ignoring input.
       resolution choice and an optional watermark
 - [x] A `picpeak_gallery` taxonomy on attachments, giving a filter dropdown in
       the media grid with no folder plugin involved
-- [x] Optional folder-plugin adapters (FileBird, Real Media Library)
+- [x] Optional folder-plugin adapters (FileBird, Real Media Library) — written,
+      not yet run against either plugin
 - [x] Release zip built by CI, named `picpeak/` as WordPress requires
 - [ ] Updates through GitHub Releases (Plugin Update Checker)
 - [ ] German translation

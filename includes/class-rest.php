@@ -294,6 +294,7 @@ class Rest {
 				'status'        => $result['status'],
 				'attachment_id' => $result['attachment_id'],
 				'title'         => $result['title'],
+				'folder'        => $result['folder'] ?? 'none',
 			);
 		}
 
