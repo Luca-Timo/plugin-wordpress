@@ -7,8 +7,9 @@ Connect the plugin once with an API token, browse your galleries from inside
 wp-admin, and import a whole gallery or a hand-picked selection — with the
 proofing metadata PicPeak already holds carried across.
 
-> **Status: early but usable.** Connection, gallery browser and import all work.
-> Not yet exercised against a live instance. See [Roadmap](#roadmap).
+> **Status: early but working.** Connection, gallery browser and import all work,
+> and the import path has been run end to end against a live PicPeak instance.
+> The folder adapters have not. See [Roadmap](#roadmap).
 
 ## Why import rather than embed
 
@@ -164,7 +165,8 @@ add_filter( 'picpeak_folder_name', fn( $name, $event ) => 'Shoots/' . $name, 10,
 - [x] Release zip built by CI, named `picpeak/` as WordPress requires
 - [ ] Updates through GitHub Releases (Plugin Update Checker)
 - [ ] German translation
-- [ ] Tested against a live PicPeak instance
+- [x] Import path tested end to end against a live instance
+- [ ] Browser UI exercised in a real admin session
 
 Import only. Nothing is written back to PicPeak.
 

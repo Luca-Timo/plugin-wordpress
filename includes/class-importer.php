@@ -139,6 +139,7 @@ class Importer {
 		if ( '' === $filename ) {
 			$filename = self::filename_for( $photo );
 		}
+		$filename = self::align_extension( $filename, $fetched['content_type'] );
 
 
 		require_once ABSPATH . 'wp-admin/includes/media.php';
@@ -160,7 +161,17 @@ class Importer {
 			if ( file_exists( $tmp ) ) {
 				wp_delete_file( $tmp );
 			}
-			return $attachment_id;
+			// WordPress's own message names neither the file nor the type, and
+			// in a batch of fifty that is the only thing worth knowing.
+			return new WP_Error(
+				$attachment_id->get_error_code(),
+				sprintf(
+					/* translators: 1: filename, 2: the reason WordPress gave. */
+					__( '%1$s: %2$s', 'picpeak' ),
+					$filename,
+					$attachment_id->get_error_message()
+				)
+			);
 		}
 
 		$attachment_id = (int) $attachment_id;
@@ -223,6 +234,46 @@ class Importer {
 		}
 
 		return Folders::place( $attachment_id, $event );
+	}
+
+	/**
+	 * Give the file an extension that matches the bytes PicPeak actually sent.
+	 *
+	 * PicPeak keeps the camera-original name, so a photo shot as RAW arrives
+	 * called `IMG_1001.CR3` even when what was served is a JPEG rendition.
+	 * WordPress decides what it will accept from the extension, refuses `.CR3`,
+	 * and the import fails with a message naming no file — for the case that
+	 * matters most, a RAW shoot being published at web size.
+	 *
+	 * This is not a way around that check. It renames the file to what the
+	 * response says it IS, so WordPress's check runs against the truth instead
+	 * of against a name inherited from a different format. When the served type
+	 * is genuinely one WordPress does not allow — a real RAW, asked for at
+	 * original size — no extension matches and it is still refused.
+	 */
+	private static function align_extension( string $filename, string $content_type ): string {
+		$type = strtolower( trim( explode( ';', $content_type )[0] ) );
+		if ( '' === $type ) {
+			return $filename;
+		}
+
+		$current = wp_check_filetype( $filename );
+		if ( ! empty( $current['type'] ) && strtolower( (string) $current['type'] ) === $type ) {
+			return $filename;
+		}
+
+		// WordPress's own extension map, so the answer is exactly what its
+		// upload check will accept rather than a second table to keep in step.
+		foreach ( wp_get_mime_types() as $extensions => $mime ) {
+			if ( strtolower( (string) $mime ) !== $type ) {
+				continue;
+			}
+			$ext  = explode( '|', $extensions )[0];
+			$base = pathinfo( $filename, PATHINFO_FILENAME );
+			return sanitize_file_name( ( '' !== $base ? $base : 'picpeak' ) . '.' . $ext );
+		}
+
+		return $filename;
 	}
 
 	/**
