@@ -18,6 +18,58 @@ class Admin {
 	public static function init(): void {
 		add_action( 'admin_menu', array( __CLASS__, 'add_page' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( PICPEAK_FILE ), array( __CLASS__, 'action_links' ) );
+		add_action( 'admin_notices', array( __CLASS__, 'setup_notice' ) );
+	}
+
+	/**
+	 * Links on the plugin's own row.
+	 *
+	 * This plugin adds no top-level menu — connection lives under Settings and
+	 * the importer under Media, which is where WordPress puts things of each
+	 * kind. The cost is that straight after activating, the screen you are
+	 * looking at says nothing about where either went. These two links are the
+	 * answer to that, on the row you just clicked Activate on.
+	 */
+	public static function action_links( $links ) {
+		$links = is_array( $links ) ? $links : array();
+
+		array_unshift(
+			$links,
+			'<a href="' . esc_url( admin_url( 'options-general.php?page=' . Settings::PAGE ) ) . '">'
+				. esc_html__( 'Settings', 'picpeak' ) . '</a>',
+			'<a href="' . esc_url( admin_url( 'upload.php?page=' . self::PAGE ) ) . '">'
+				. esc_html__( 'Import', 'picpeak' ) . '</a>'
+		);
+
+		return $links;
+	}
+
+	/**
+	 * One notice, once, until it is connected.
+	 *
+	 * Shown only on the plugins and dashboard screens, and only to someone who
+	 * could act on it — a nag on every screen of the admin is its own problem.
+	 */
+	public static function setup_notice(): void {
+		if ( Settings::is_configured() || ! current_user_can( Settings::CAP ) ) {
+			return;
+		}
+
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen || ! in_array( $screen->id, array( 'plugins', 'dashboard' ), true ) ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-info"><p>%s</p></div>',
+			sprintf(
+				/* translators: %s: link to the PicPeak settings screen. */
+				esc_html__( 'PicPeak is installed but not connected yet. %s', 'picpeak' ),
+				'<a href="' . esc_url( admin_url( 'options-general.php?page=' . Settings::PAGE ) ) . '">'
+					. esc_html__( 'Add your instance URL and API token', 'picpeak' ) . '</a>'
+			)
+		);
 	}
 
 	public static function add_page(): void {

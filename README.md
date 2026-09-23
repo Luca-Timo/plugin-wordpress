@@ -41,6 +41,16 @@ is not merged yet:
 Importing originals one at a time, and the bulk ZIP, work on current PicPeak
 without that PR.
 
+## Where it appears
+
+The plugin adds no top-level menu. After activating, it is in the two places
+WordPress puts things of each kind:
+
+- **Settings → PicPeak** — the instance URL and API token. Start here.
+- **Media → Import from PicPeak** — the gallery browser and importer.
+
+Both are also linked from the plugin's own row on the Plugins screen.
+
 ## Installation
 
 Download `picpeak.zip` from [Releases](../../releases), then **Plugins → Add New →
