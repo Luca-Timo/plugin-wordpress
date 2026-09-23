@@ -84,6 +84,10 @@ class Taxonomy {
 
 	/** The media library's own filter row, on the list view. */
 	public static function filter_dropdown( string $post_type ): void {
+		// upload_files here on purpose, not Rest::capability(): this only
+		// filters attachments the viewer can already see in the library. It
+		// reaches nothing on the PicPeak side, so gating it at manage_options
+		// would hide a useful filter for no benefit.
 		if ( 'attachment' !== $post_type || ! current_user_can( 'upload_files' ) ) {
 			return;
 		}
