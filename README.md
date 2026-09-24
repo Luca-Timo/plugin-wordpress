@@ -11,6 +11,8 @@ proofing metadata PicPeak already holds carried across.
 > and the import path has been run end to end against a live PicPeak instance.
 > The folder adapters have not. See [Roadmap](#roadmap).
 
+![Selecting photos to import, filtered by the photographer's own colour and star marks](docs/screenshots/01-import-grid.png)
+
 ## Why import rather than embed
 
 PicPeak galleries expire by design. Hotlinking them into posts ties your site's
@@ -51,6 +53,14 @@ WordPress puts things of each kind:
 - **Media → Import from PicPeak** — the gallery browser and importer.
 
 Both are also linked from the plugin's own row on the Plugins screen.
+
+<img src="docs/screenshots/03-media-menu.png" width="320" alt="The Media menu, with Import from PicPeak and PicPeak galleries">
+
+Connect it once under **Settings → PicPeak**. **Test connection** reports how
+many galleries the token can actually see, so an empty result is an answer
+rather than an ambiguous silence:
+
+![The settings screen, with the instance URL and a stored token](docs/screenshots/02-settings.png)
 
 ## Installation
 
